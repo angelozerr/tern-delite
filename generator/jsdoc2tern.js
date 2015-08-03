@@ -27,7 +27,8 @@
       var jsdocItem = jsDoc[i];
       if (jsdocItem.kind == "module") {
     	// create module
-        getTernModule(jsdocItem.name, ternDef);
+        var mod = getTernModule(jsdocItem.name, ternDef);
+        if (jsdocItem.description) mod["!doc"] = jsdocItem.description;
       } else {
         var parent = getParent(jsdocItem, ternDef);
     	if (parent) {
@@ -61,35 +62,9 @@
 	          //console.log("	" + jsdocItem.name)
 	      }
   	      if (type) parent["!type"] = type;
-  	      //if (description) parent["!doc"] = description;
+  	      if (description) parent["!doc"] = description;
     	}
       }
-  
-//      if (!this.isIgnoreClassItem(yuiClassItem) && isAccess(yuiClassItem, this.options.isSubModule)) {
-//    	if (isEventType(yuiClassItem)) {
-//    		// TODO : add event inside !data
-//    	} else {
-//          var moduleName = getModuleName(yuiClassItem, jsDoc, true), className = yuiClassItem["class"], attributeType = isAttributeType(yuiClassItem), 
-//              isStaticMethod = (isStatic(yuiClassItem) || attributeType);
-//          // case of DataTable.BodyView.Formatters which is a Class and object property
-//          var isObjectAndClassBoth = (yuiClassItem["type"] == "Object") && yuiClassItem["itemtype"] == "property" && jsDoc.classes[className + "."  + yuiClassItem["name"]];
-//          if (isObjectAndClassBoth) className = className + "."  + yuiClassItem["name"];
-//    	  if (moduleName) {
-//    	    var ternModule = getTernModule(moduleName, ternDef, this.options.isSubModule, jsDoc);
-//    	    var ternClass = null;
-//    	    if (isGlobal(yuiClassItem)) {
-//    	      ternClass = ternDef;
-//    	    } else {
-//    	      ternClass = attributeType ? getTernClassConfig(className, ternDef["!define"], jsDoc) :
-//    	        this.getTernClass(className, ternModule, moduleName.replace(/-/g, '_'), jsDoc, null, ternDef);
-//    	    }    	                                    
-//    	    if (!isObjectAndClassBoth) {
-//              var ternClassItem = isStaticMethod ? ternClass : getTernClassPrototype(ternClass);
-//              this.visitClassItem(yuiClassItem, jsDoc, ternClassItem, ternDef);
-//            }	    
-//    	  }
-//    	}
-//      }
     }
   }
   
@@ -101,20 +76,33 @@
 	  return mod;
   }
   
-  function getModuleName(name) {
+  /*function getModuleName(name) {
 	return name.substring("module:".length, name.length);	
-  }
+  }*/
   
   var getParent = function(jsdocItem, ternDef) {
-    if (startsWith(jsdocItem.name, "module:")) {
-      var moduleName = getModuleName(jsdocItem.name);
-      return getTernModule(moduleName, ternDef);
+    var name = jsdocItem.memberof ? jsdocItem.memberof : jsdocItem.name;
+    if (startsWith(name, "module:")) {
+      name = name.substring("module:".length, name.length);
+      var index = name.indexOf("."), moduleName = index == -1 ? name : name.substring(0, index);
+      var parent = getTernModule(moduleName, ternDef);
+      if (index != -1) {
+        var names = name.substring(index + 1, name.length).split(".");
+        for (var i = 0; i < names.length; i++) {
+          if (parent[names[i]]) {
+            parent = parent[names[i]]; 
+          } else {
+            parent = parent[names[i]] = {};
+          }
+        }
+      }
+      return jsdocItem.memberof ? parent[jsdocItem.name] = {} : parent;
     }
-    if (startsWith(jsdocItem.memberof, "module:")) {
+    /*if (startsWith(jsdocItem.memberof, "module:")) {
       var moduleName = getModuleName(jsdocItem.memberof);
       var ternModule = getTernModule(moduleName, ternDef);
       return ternModule[jsdocItem.name] = {};
-    }
+    }*/
     return null;
   }
 
@@ -200,34 +188,6 @@
   
   Generator.prototype.isIgnoreClassItem = function(yuiClassItem) {    
     return this.options.isIgnoreClassItem ? this.options.isIgnoreClassItem(yuiClassItem) : false;
-  }
-  
-  Generator.prototype.visitClassItem = function(yuiClassItem, jsDoc, ternClassItem, ternDef) {
-	var moduleName = getModuleName(yuiClassItem, jsDoc), className = yuiClassItem["class"], name = yuiClassItem["name"];	
-    // !type
-	var type = this.getTernType(yuiClassItem, jsDoc, ternDef); 
-    // !proto
-    var proto = null;
-    var effects = this.options.getEffects ? this.options.getEffects(moduleName, className, name, !isStatic(yuiClassItem)) : null;
-    // !doc
-    var doc = getDescription(yuiClassItem);
-    // !url
-    var url = this.options.baseURL ? getURL(this.options.baseURL, className, yuiClassItem.itemtype, name) : null;
-    // !data
-    var submodule = yuiClassItem["submodule"];
-    var data = this.options.getData ? this.options.getData(moduleName, className, name, !isStatic(yuiClassItem)) : null;
-    if (submodule) {
-      if (!data) data = {};
-      data["submodule"] = submodule;
-    }
-    createTernDefItem(ternClassItem, name, type, proto, effects, url, doc, data);	
-  }
-  
-  Generator.prototype.getTernType = function(yuiClass, jsDoc, ternDef) {
-	var moduleName = getModuleName(yuiClass, jsDoc), className = yuiClass["class"] ? yuiClass["class"] : yuiClass["name"], name = yuiClass["class"] ? yuiClass["name"] : null;	
-	var overridedType = this.options.getType ? this.options.getType(moduleName, className, name, !isStatic(yuiClass)) : null;
-	if (overridedType) return overridedType;
-	return getTernType(yuiClass, jsDoc, this.options.isSubModule, ternDef);
   }
   
   Generator.prototype.getTernClass = function(className, parent, moduleName, jsDoc, fullClassName, ternDef) {
